@@ -1,8 +1,17 @@
 <template>
   <div class="anime-list">
-    <el-row :gutter="20">
-      <el-col :xs="12" :sm="8" :md="6" :lg="4" v-for="anime in animeList" :key="anime.id">
-        <el-card :body-style="{ padding: '0px' }" class="anime-card">
+    <el-row :gutter="24">
+      <el-col 
+        :xs="24"
+        :sm="12"
+        :md="8"
+        :lg="6"
+        :xl="6"
+        v-for="anime in animeList" 
+        :key="anime.id"
+        class="anime-col"
+      >
+        <el-card :body-style="{ padding: '0px' }" class="anime-card" @click="handleAnimeClick(anime)">
           <el-image 
             :src="anime.imageUrl" 
             fit="cover"
@@ -45,13 +54,15 @@ import { ElMessage } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
 import { mockAnimeList } from '../mock/animeData'
 import type { Anime } from '../types/anime'
+import { useRouter } from 'vue-router'
 
 // 数据状态
 const animeList = ref<Anime[]>([])
 const currentPage = ref(1)
-const pageSize = ref(24)
+const pageSize = ref(12)
 const total = ref(0)
 const loading = ref(false)
+const router = useRouter()
 
 // 模拟 API 调用
 const fetchAnimeList = async () => {
@@ -104,6 +115,15 @@ const handleCurrentChange = (val: number) => {
   fetchAnimeList()
 }
 
+// 添加点击处理函数
+const handleAnimeClick = (anime: Anime) => {
+  router.push({
+    name: 'player',
+    params: { id: anime.id },
+    query: { url: anime.videoUrl }  // 假设anime对象中包含videoUrl
+  })
+}
+
 // 组件挂载时获取数据
 onMounted(() => {
   fetchAnimeList()
@@ -113,14 +133,25 @@ onMounted(() => {
 <style scoped>
 .anime-list {
   background-color: var(--background);
-  padding: 1.5rem;
+  padding: 1rem;
+}
+
+.anime-col {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
 }
 
 .anime-card {
+  width: 100%;
+  max-width: 280px;
   background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
 }
 
 .anime-card:hover {
@@ -133,6 +164,7 @@ onMounted(() => {
   width: 100%;
   display: block;
   border-bottom: 3px solid #95e1d3;
+  object-fit: cover;
 }
 
 .image-error {
@@ -146,24 +178,32 @@ onMounted(() => {
 
 .anime-info {
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .anime-title {
   font-size: 14px;
   margin: 0 0 10px;
+  line-height: 1.4;
   height: 40px;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   color: var(--text-primary);
   font-weight: 600;
 }
 
+:deep(.el-tag) {
+  margin-top: auto;
+}
+
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 32px;
   display: flex;
   justify-content: center;
+  padding: 0 1rem;
 }
 
 :deep(.el-pagination.is-background .el-pager li.is-active) {
@@ -209,5 +249,16 @@ onMounted(() => {
 
 .status-upcoming {
   background-color: #f59e0b;  /* 橙色 */
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .anime-card {
+    max-width: 100%; /* 在小屏幕上取消最大宽度限制 */
+  }
+  
+  .anime-image {
+    height: 180px; /* 在小屏幕上稍微降低图片高度 */
+  }
 }
 </style> 

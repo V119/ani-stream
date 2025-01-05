@@ -3,6 +3,7 @@ export interface Anime {
     id: number
     name: string
     imageUrl: string
+    videoUrl: string
     status: 'ongoing' | 'completed' | 'upcoming'
 }
 
