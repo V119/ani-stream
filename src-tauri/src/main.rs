@@ -4,3 +4,5 @@
 fn main() {
     ani_stream_lib::run()
 }
+
+pub mod spider;

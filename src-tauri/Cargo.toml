@@ -18,8 +18,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+retry = { path = "retry" }
+
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
+ts-rs = "10.1.0"
+reqwest = "0.12.12"
+scraper = "0.22.0"
+anyhow = "1.0.95"
