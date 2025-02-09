@@ -4,9 +4,18 @@ use ts_rs::TS;
 #[derive(TS, Serialize, Clone, Debug)]
 #[ts(export, export_to = "../../src/bindings/")]
 pub struct Item {
-    name: String,
-    image_url: String,
-    status: String,
-    page_url: String,
+    pub id: String,
+    pub name: String,
+    pub image_url: String,
+    pub desc: String,
+    pub page_url: String,
 }
 
+
+#[derive(TS, Serialize, Clone, Debug)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct MainPage {
+    pub items: Vec<Item>,
+    pub pre_page: Option<String>,
+    pub next_pagr: Option<String>,
+}
