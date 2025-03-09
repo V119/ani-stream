@@ -7,13 +7,13 @@
         :md="8"
         :lg="6"
         :xl="6"
-        v-for="anime in animeList" 
-        :key="anime.id"
+        v-for="item in animeList?.items" 
+        :key="item.id"
         class="anime-col"
       >
-        <el-card :body-style="{ padding: '0px' }" class="anime-card" @click="handleAnimeClick(anime)">
+        <el-card :body-style="{ padding: '0px' }" class="anime-card" @click="handleAnimeClick(item)">
           <el-image 
-            :src="anime.imageUrl" 
+            :src="item.image_url" 
             fit="cover"
             class="anime-image"
             :lazy="true">
@@ -25,10 +25,8 @@
           </el-image>
           
           <div class="anime-info">
-            <h3 class="anime-title">{{ anime.name }}</h3>
-            <el-tag :type="getStatusType(anime.status)">
-              {{ getStatusText(anime.status) }}
-            </el-tag>
+            <h3 class="anime-title">{{ item.name }}</h3>
+            <p class="anime-desc">{{ item.desc }}</p>
           </div>
         </el-card>
       </el-col>
@@ -52,55 +50,30 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
-import { mockAnimeList } from '../mock/animeData'
-import type { Anime } from '../types/anime'
 import { useRouter } from 'vue-router'
+import { ItemPage } from '../bindings/ItemPage'
+import { invoke } from "@tauri-apps/api/core"
 
 // 数据状态
-const animeList = ref<Anime[]>([])
+const animeList = ref<ItemPage>()
 const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 const loading = ref(false)
 const router = useRouter()
 
-// 模拟 API 调用
+// 获取数据函数
 const fetchAnimeList = async () => {
-  try {
+
     loading.value = true
-    // 模拟网络延迟
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // 计算分页数据
-    const start = (currentPage.value - 1) * pageSize.value
-    const end = start + pageSize.value
-    const paginatedData = mockAnimeList.slice(start, end)
-    
-    animeList.value = paginatedData
-    total.value = mockAnimeList.length
-  } catch (error) {
-    ElMessage.error('获取数据失败，请稍后重试')
-  } finally {
-    loading.value = false
-  }
-}
-// 状态映射
-const getStatusType = (status: string): 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
-  const statusMap: Record<string, 'success' | 'warning' | 'info'> = {
-    ongoing: 'success',
-    completed: 'info',
-    upcoming: 'warning'
-  }
-  return statusMap[status as keyof typeof statusMap] || 'info'
-}
-
-const getStatusText = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    ongoing: '连载中',
-    completed: '已完结',
-    upcoming: '即将上映'
-  }
-  return statusMap[status as keyof typeof statusMap] || '未知'
+    await invoke("main_page", {}).then((response) => {
+      animeList.value = response as ItemPage
+      total.value = animeList.value?.items.length || 0
+    }).catch((e) => {
+      ElMessage.error('获取数据失败: ' + e + '，请稍后重试')
+    }).finally(() => {
+      loading.value = false
+    })
 }
 
 // 分页处理
@@ -110,17 +83,31 @@ const handleSizeChange = (val: number) => {
   fetchAnimeList()
 }
 
-const handleCurrentChange = (val: number) => {
+const handleCurrentChange = async (val: number) => {
   currentPage.value = val
-  fetchAnimeList()
+  if (val > currentPage.value) {
+    try {
+      const response = await invoke('spider:next_page')
+      animeList.value = response as ItemPage
+    } catch (error) {
+      ElMessage.error('获取下一页失败')
+    }
+  } else {
+    try {
+      const response = await invoke('spider:pre_page')
+      animeList.value = response as ItemPage
+    } catch (error) {
+      ElMessage.error('获取上一页失败')
+    }
+  }
 }
 
-// 添加点击处理函数
-const handleAnimeClick = (anime: Anime) => {
+// 点击处理函数
+const handleAnimeClick = (item: any) => {
   router.push({
     name: 'player',
-    params: { id: anime.id },
-    query: { url: anime.videoUrl }  // 假设anime对象中包含videoUrl
+    params: { id: item.id },
+    query: { url: item.page_url }
   })
 }
 
@@ -261,4 +248,15 @@ onMounted(() => {
     height: 180px; /* 在小屏幕上稍微降低图片高度 */
   }
 }
-</style> 
+
+.anime-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+</style>

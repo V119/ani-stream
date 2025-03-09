@@ -1,13 +1,16 @@
-use std::collections::HashMap;
 use super::model::Item;
 use crate::spider::model::MainPage;
 use anyhow::{Ok, Result};
+use regex::Regex;
 use reqwest::{header, Client};
 use scraper::{Html, Selector};
-use regex::Regex;
+use state::InitCell;
+use std::{collections::HashMap, sync::RwLock};
 
 const DOMAIN: &str = "http://dilidili11.com";
 const MAIN_PAGE_URI: &str = "/acg/0/0/all/1.html";
+
+static CURRENT_PAGE: InitCell<RwLock<Option<MainPage>>> = InitCell::new();
 
 async fn fetch_html(url: &str) -> Result<Html> {
     let html = get_by_url(url).await?;
@@ -38,7 +41,7 @@ async fn get_by_url(url: &str) -> Result<String> {
     Ok(text)
 }
 
-pub async fn page(sub_url: Option<&str>) -> Result<MainPage> {
+pub async fn get_page(sub_url: Option<String>) -> Result<MainPage> {
     let url = match sub_url {
         None => {
             format!("{}{}", DOMAIN, MAIN_PAGE_URI)
@@ -47,29 +50,79 @@ pub async fn page(sub_url: Option<&str>) -> Result<MainPage> {
             format!("{}{}", DOMAIN, sub_url)
         }
     };
-    let html = fetch_html(url.as_str()).await?;
 
-    let items_page_html = item_page_html(&html).await?;
+    let html_string = get_by_url(&url).await?;
 
-    let items = parse_items(&items_page_html)?;
-    let pages = parse_pages(&html)?;
+    let (items_url, pages) = {
+        let document = Html::parse_document(&html_string);
+        let pages = parse_pages(&document)?;
+        let items_url = items_page_url(&document);
+        (items_url, pages)
+    };
 
-    Ok(MainPage {
+    let items_html = get_by_url(&items_url).await?;
+    let items = {
+        let items_document = Html::parse_document(&items_html);
+        parse_items(&items_document)?
+    };
+
+    let page = MainPage {
         items,
         pre_page: pages.0,
-        next_pagr: pages.1,
-    })
+        next_page: pages.1,
+    };
+
+    let current_page = CURRENT_PAGE.try_get();
+    match current_page {
+        Some(current_page) => {
+            if let std::result::Result::Ok(mut current_page) = current_page.write() {
+                *current_page = Some(page.clone());
+            }
+        }
+        None => {
+            CURRENT_PAGE.set(RwLock::new(Some(page.clone())));
+        }
+    }
+
+    Ok(page)
 }
 
-async fn item_page_html(html: &Html) -> Result<Html> {
-    let items_page_url = items_page_url(&html);
+pub async fn next_page() -> Result<MainPage> {
+    let next_url = CURRENT_PAGE
+        .get()
+        .read()
+        .map_err(|_| anyhow::anyhow!("无法读取当前页面状态"))?
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("当前页面不存在"))?
+        .next_page
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("没有下一页"))?;
 
-    fetch_html(items_page_url.as_str()).await
+    get_page(Some(next_url)).await
+}
+
+pub async fn pre_page() -> Result<MainPage> {
+    let pre_url = CURRENT_PAGE
+        .get()
+        .read()
+        .map_err(|_| anyhow::anyhow!("无法读取当前页面状态"))?
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("当前页面不存在"))?
+        .pre_page
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("没有上一页"))?;
+
+    get_page(Some(pre_url)).await
 }
 
 pub fn items_page_url(html: &Html) -> String {
     let url_script = html
-        .select(&Selector::parse("body > div.topall > div > div.nav-down-mb.filter.shadow.clearfix > ul > script").unwrap())
+        .select(
+            &Selector::parse(
+                "body > div.topall > div > div.nav-down-mb.filter.shadow.clearfix > ul > script",
+            )
+            .unwrap(),
+        )
         .next()
         .map(|s| s.text().collect::<String>())
         .unwrap_or_default();
@@ -77,22 +130,26 @@ pub fn items_page_url(html: &Html) -> String {
     let base_url_map = parse_js_script(url_script.as_str());
     let base_url = base_url_map.get("_yu_gda_s_sp").unwrap();
 
-    let params_script = html.select(&Selector::parse("body > div.wrap > div.index-tj.mb.clearfix > ul.main > script").unwrap())
+    let params_script = html
+        .select(
+            &Selector::parse("body > div.wrap > div.index-tj.mb.clearfix > ul.main > script")
+                .unwrap(),
+        )
         .next()
         .map(|s| s.text().collect::<String>())
         .unwrap_or_default();
     let params_map = parse_js_script(params_script.as_str());
 
-    format!("{base_url}?action={}&page={}&year={}&area={}&class={}&dect={}&id={}",
-            params_map.get("fj_action_").unwrap_or(&String::default()),
-            params_map.get("fj_page_").unwrap_or(&String::default()),
-            params_map.get("fj_year").unwrap_or(&String::default()),
-            params_map.get("fj_year").unwrap_or(&String::default()),
-            params_map.get("fj_class").unwrap_or(&String::default()),
-            params_map.get("dect").unwrap_or(&String::default()),
-            params_map.get("fj_id_").unwrap_or(&String::default()),
+    format!(
+        "{base_url}?action={}&page={}&year={}&area={}&class={}&dect={}&id={}",
+        params_map.get("fj_action_").unwrap_or(&String::default()),
+        params_map.get("fj_page_").unwrap_or(&String::default()),
+        params_map.get("fj_year").unwrap_or(&String::default()),
+        params_map.get("fj_year").unwrap_or(&String::default()),
+        params_map.get("fj_class").unwrap_or(&String::default()),
+        params_map.get("dect").unwrap_or(&String::default()),
+        params_map.get("fj_id_").unwrap_or(&String::default()),
     )
-
 }
 
 fn parse_js_script(script: &str) -> HashMap<String, String> {
@@ -189,7 +246,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_main_page() {
-        let main_page = page(None).await;
+        let main_page = get_page(None).await;
 
         println!("main_page: {main_page:#?}");
     }

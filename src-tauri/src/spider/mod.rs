@@ -1,2 +1,4 @@
 pub mod model;
-mod spider;
+pub mod spider;
+
+

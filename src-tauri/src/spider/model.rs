@@ -17,5 +17,13 @@ pub struct Item {
 pub struct MainPage {
     pub items: Vec<Item>,
     pub pre_page: Option<String>,
-    pub next_pagr: Option<String>,
+    pub next_page: Option<String>,
+}
+
+#[derive(TS, Serialize, Clone, Debug)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ItemPage {
+    pub items: Vec<Item>,
+    pub pre_page: Option<String>,
+    pub next_page: Option<String>,
 }
